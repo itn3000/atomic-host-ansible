@@ -1,0 +1,33 @@
+- hosts: atomicmaster
+  become: yes
+  tasks:
+    - debug: var=KUBE_REGISTRY_MIRROR_PORT
+    - name: create registry
+      docker_container: 
+        state: present
+        name: local-registry
+        image: registry:2
+        published_ports: "{{KUBE_REGISTRY_MIRROR_PORT}}:{{KUBE_REGISTRY_MIRROR_PORT}}"
+        volumes:
+          - /var/lib/local-registry:/var/lib/registry
+        env:
+          REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+          REGISTRY_PROXY_REMOTEURL: https://registry-1.docker.io
+    - name: systemd service unit file
+      copy:
+        dest: /etc/systemd/system/local-registry.service
+        src: local-registry.service
+        group: root
+        owner: root
+        mode: "u=rw,g=r,o=r"
+    - name: ensure registry dir
+      file:
+        path: /var/lib/local-registry
+        state: directory
+    - name: ensure selinux label of registry dir
+      command: chcon -t svirt_sandbox_file_t /var/lib/local-registry
+    - name: start registry service
+      service:
+        enabled: yes
+        name: local-registry
+        state: started

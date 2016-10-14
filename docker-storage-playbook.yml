@@ -1,0 +1,14 @@
+- hosts: atomichosts
+  become: yes
+  tasks:
+    - debug: var=ROOT_SIZE
+    - name: set ROOT_SIZE
+      register: docker_storage_root_size
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/docker-storage-setup
+        regexp: '^ROOT_SIZE='
+        line: "ROOT_SIZE={{ROOT_SIZE}}"
+    - name: update storage parameter
+      command: /bin/docker-storage-setup
+      when: docker_storage_root_size.changed

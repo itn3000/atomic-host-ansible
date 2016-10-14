@@ -1,0 +1,5 @@
+*.conf eol=lf
+*.yml eol=lf
+*.ini eol=lf
+.gitignore text
+.gitattributes text

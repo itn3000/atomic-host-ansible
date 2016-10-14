@@ -1,0 +1,49 @@
+- hosts: atomichosts
+  become: yes
+  tasks:
+    - debug: var=http_proxy
+    - debug: var=https_proxy
+    - name: ostree proxy setting
+      lineinfile:
+        state: present
+        dest: /etc/ostree/remotes.d/centos-atomic-host.conf
+        regexp: '^proxy='
+        line: proxy={{http_proxy}}
+    - name: bash profile http proxy setting
+      lineinfile: 
+        state: present
+        dest: /etc/bashrc
+        regexp: '^export http_proxy='
+        line: "export http_proxy={{http_proxy}}"
+    - name: bash profile https proxy setting
+      lineinfile:
+        state: present
+        dest: /etc/bashrc
+        regexp: '^export https_proxy='
+        line: "export https_proxy={{https_proxy}}"
+    - name: docker daemon http proxy setting
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/docker
+        regexp: '^http_proxy='
+        line: http_proxy={{http_proxy}}
+    - name: docker daemon https proxy setting
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/docker
+        regexp: '^https_proxy='
+        line: "https_proxy={{https_proxy}}"
+    - name: yum http proxy
+      lineinfile:
+        state: present
+        dest: /etc/yum.conf
+        regexp: '^http_proxy='
+        line: "http_proxy={{http_proxy}}"
+    - name: yum https proxy
+      lineinfile:
+        state: present
+        dest: /etc/yum.conf
+        regexp: '^https_proxy='
+        line: "https_proxy={{https_proxy}}"
+
+

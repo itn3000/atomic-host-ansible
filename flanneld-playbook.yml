@@ -1,0 +1,38 @@
+- hosts: atomichosts
+  become: yes
+  vars:
+    KUBE_ETCD_SERVER_URL: "http://{{KUBE_ETCD_SERVER_HOST}}:{{KUBE_ETCD_PORT_PRI}}"
+    KUBE_FLANNELD_CONFIG_KEY: "/atomic01/network"
+  tasks:
+    - debug: var=KUBE_ETCD_SERVER_URL
+    - debug: var=KUBE_FLANNELD_CONFIG_KEY
+    - name: setting flannel config file
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/flanneld
+        regexp: '^FLANNEL_ETCD='
+        line: 'FLANNEL_ETCD="{{KUBE_ETCD_SERVER_URL}}"'
+    - name: setting flanneld etcd key
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/flanneld
+        regexp: '^FLANNEL_ETCD_KEY='
+        line: 'FLANNEL_ETCD_KEY="{{KUBE_FLANNELD_CONFIG_KEY}}"'
+    - name: ensure docker service unit directory
+      file:
+        dest: /etc/systemd/system/docker.service.d
+        state: directory
+    - name: put docker service unit setting for flannel
+      copy:
+        src: 10-flanneld-network.conf
+        dest: /etc/systemd/system/docker.service.d/10-flanneld-network.conf
+      register: flanneld_unit
+    - name: execute daemon-reload
+      register: flanneld_reload
+      command: systemctl daemon-reload
+      when: flanneld_unit.changed
+    - name: restart docker service
+      when: flanneld_reload.changed
+      service:
+        state: restarted
+        name: docker

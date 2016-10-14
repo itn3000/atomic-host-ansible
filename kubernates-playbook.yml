@@ -1,0 +1,82 @@
+- hosts: atomicmaster
+  vars:
+    KUBE_ETCD_PORT_PRI: 2379
+    KUBE_ETCD_PORT_SEC: 4001
+    KUBE_ETCD_SERVER_URL: "http://{{ansible_fqdn}}:{{KUBE_ETCD_PORT_PRI}}"
+    KUBE_MASTER_URL: "http://{{ansible_fqdn}}:{{KUBE_API_SERVER_PORT}}"
+  become: yes
+  tasks:
+    - debug: var=KUBE_ETCD_PORT_PRI
+    - debug: var=KUBE_ETCD_PORT_SEC
+    - debug: var=KUBE_ETCD_SERVER_URL
+    - debug: var=KUBE_MASTER_URL
+    - name: set etcd listen client urls
+      lineinfile:
+        state: present
+        dest: /etc/etcd/etcd.conf
+        regexp: '^ETCD_LISTEN_CLIENT_URLS='
+        line: 'ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:{{KUBE_ETCD_PORT_PRI}},http://0.0.0.0:{{KUBE_ETCD_PORT_SEC}}"'
+    - name: set etcd advertise client urls
+      lineinfile:
+        state: present
+        dest: /etc/etcd/etcd.conf
+        regexp: '^ETCD_ADVERTISE_CLIENT_URLS='
+        line: 'ETCD_ADVERTISE_CLIENT_URLS="http://0.0.0.0:{{KUBE_ETCD_PORT_PRI}},http://0.0.0.0:{{KUBE_ETCD_PORT_SEC}}"'
+    - name: set kubernetes etcd config
+      lineinfile:
+        state: present
+        dest: /etc/kubernetes/config
+        regexp: '^KUBE_ETCD_SERVERS='
+        line: 'KUBE_ETCD_SERVERS="--etcd_servers={{KUBE_ETCD_SERVER_URL}}"'
+    - name: set kubernetes master url
+      lineinfile:
+        state: present
+        dest: /etc/kubernetes/config
+        regexp: '^KUBE_MASTER='
+        line: 'KUBE_MASTER="--master={{KUBE_MASTER_URL}}"'
+    - name: set kubernetes apiserver url
+      register: kube_api_server_address
+      lineinfile:
+        state: present
+        dest: /etc/kubernetes/apiserver
+        regexp: '^KUBE_API_ADDRESS='
+        line: 'KUBE_API_ADDRESS="--address=0.0.0.0"'
+    - name: set kubernetes admission control option
+      lineinfile:
+        state: present
+        dest: /etc/kubernetes/apiserver
+        regexp: '^KUBE_ADMISSION_CONTROL='
+        line: 'KUBE_ADMISSION_CONTROL="--admission_control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota"'
+      register: kube_api_server_admission_control
+    - name: copy flannel configuration
+      copy:
+        src: flanneld-conf.json
+        dest: /tmp/flanneld-conf.json
+    - name: start etcd service
+      service:
+        state: started
+        enabled: yes
+        name: etcd
+    - name: start kubernetes api server
+      service:
+        state: started
+        enabled: yes
+        name: kube-apiserver
+    - name: ensure kubernetes api server restarted if changed
+      service:
+        state: restarted
+        enabled: yes
+        name: kube-api-server
+      when: kube_api_server_address.changed or kube_api_server_admission_control.changed
+    - name: start kubernetes controller manager server
+      service:
+        state: started
+        enabled: yes
+        name: kube-controller-manager
+    - name: start kubernetes scheduler service
+      service:
+        state: started
+        enabled: yes
+        name: kube-scheduler
+    - name: push flannel configuration
+      command: "curl --noproxy localhost -L http://localhost:{{KUBE_ETCD_PORT_PRI}}/v2/keys/atomic01/network/config -XPUT --data-urlencode value@flanneld-conf.json"

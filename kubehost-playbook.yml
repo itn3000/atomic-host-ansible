@@ -1,0 +1,49 @@
+- hosts: atomichosts
+  become: yes
+  vars:
+    KUBE_REGISTRY_MIRROR_URL: http://{{KUBE_API_SERVER_HOST}}:{{KUBE_REGISTRY_MIRROR_PORT}}
+    KUBE_MASTER_URL: http://{{KUBE_API_SERVER_HOST}}:{{KUBE_API_SERVER_PORT}}
+  tasks:
+    - debug: var=KUBE_REGISTRY_MIRROR_URL
+    - debug: var=KUBE_MASTER_URL
+    - name: configure docker option
+      register: docker_registry_mirror
+      lineinfile:
+        state: present
+        dest: /etc/sysconfig/docker
+        regexp: '^OPTIONS=.*registry-mirror'
+        line: "OPTIONS='--registry-mirror={{KUBE_REGISTRY_MIRROR_URL}} --selinux-enabled'"
+    - name: configure kubelet address option
+      register: kubelet_address_option
+      lineinfile:
+        dest: /etc/kubernetes/kubelet
+        state: present
+        regexp: '^KUBELET_ADDRESS='
+        line: 'KUBELET_ADDRESS="--address={{ansible_default_ipv4.address}}"'
+    - name: configure kubelet apiserver
+      register: kube_api_server
+      lineinfile:
+        dest: /etc/kubernetes/kubelet
+        state: present
+        regexp: '^KUBELET_API_SERVER='
+        line: 'KUBELET_API_SERVER="--api_servers={{KUBE_MASTER_URL}}"'
+    - name: configure kubelet master server
+      register: kube_master_server
+      lineinfile:
+        state: present
+        dest: /etc/kubernetes/kubelet
+        regexp: '^KUBE_MASTER='
+        line: 'KUBE_MASTER="--master={{KUBE_MASTER_URL}}"'
+    - name: reload systemd daemon
+      register: docker_registry_reloaded
+      when: docker_registry_mirror.changed
+      command: "systemctl daemon-reload"
+    - name: enabling flanneld service
+      service:
+        state: started
+        enabled: yes
+        name: flanneld
+    - name: enabling kubelet service
+      service: state=started enabled=yes name=kubelet
+    - name: enabling kube-proxy service
+      service: state=started enabled=yes name=kube-proxy
