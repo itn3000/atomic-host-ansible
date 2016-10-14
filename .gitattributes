@@ -3,3 +3,4 @@
 *.ini eol=lf
 .gitignore text
 .gitattributes text
+* text=auto
